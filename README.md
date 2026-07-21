@@ -119,6 +119,10 @@ This crate implements the structured text embedding and data hash for WebVTT as 
 | [c2pa-warc](https://github.com/writerslogic/c2pa-warc) | WARC web archive embedding |
 | [c2pa-rs](https://crates.io/crates/c2pa) | Official C2PA SDK |
 
+## Security
+
+Found a vulnerability? Please report it privately — see [SECURITY.md](./SECURITY.md).
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT License](LICENSE-MIT) at your option.
