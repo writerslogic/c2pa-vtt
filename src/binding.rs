@@ -81,37 +81,22 @@ pub fn verify_data_hash(text: &str, alg: HashAlg, expected: &[u8]) -> Result<boo
 
 #[cfg(feature = "hash")]
 fn hash_excluding(bytes: &[u8], ex: Exclusion, alg: HashAlg) -> Result<Vec<u8>, Error> {
+    use c2pa_structured_text::hardbinding::{apply_exclusions, Exclusion as StExclusion};
     use sha2::{Digest, Sha256, Sha384, Sha512};
 
-    let end = ex
-        .start
-        .checked_add(ex.length)
-        .ok_or(Error::ExclusionOutOfRange)?;
-    if end > bytes.len() {
-        return Err(Error::ExclusionOutOfRange);
-    }
-    let before = &bytes[..ex.start];
-    let after = &bytes[end..];
+    let covered = apply_exclusions(
+        bytes,
+        &[StExclusion {
+            start: ex.start,
+            length: ex.length,
+        }],
+    )
+    .map_err(|_| Error::ExclusionOutOfRange)?;
 
     Ok(match alg {
-        HashAlg::Sha256 => {
-            let mut h = Sha256::new();
-            h.update(before);
-            h.update(after);
-            h.finalize().to_vec()
-        }
-        HashAlg::Sha384 => {
-            let mut h = Sha384::new();
-            h.update(before);
-            h.update(after);
-            h.finalize().to_vec()
-        }
-        HashAlg::Sha512 => {
-            let mut h = Sha512::new();
-            h.update(before);
-            h.update(after);
-            h.finalize().to_vec()
-        }
+        HashAlg::Sha256 => Sha256::digest(&covered).to_vec(),
+        HashAlg::Sha384 => Sha384::digest(&covered).to_vec(),
+        HashAlg::Sha512 => Sha512::digest(&covered).to_vec(),
     })
 }
 

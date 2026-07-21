@@ -1,6 +1,6 @@
-use crate::base64;
 use crate::error::Error;
-use crate::extract::{extract_manifest, is_webvtt, BEGIN, END};
+use crate::extract::{extract_manifest, is_webvtt};
+use c2pa_structured_text::{codec, BEGIN, DATA_URI_PREFIX, END};
 
 /// A manifest to associate with a WebVTT file.
 pub enum ManifestRef<'a> {
@@ -25,7 +25,7 @@ pub fn embed_manifest(text: &str, manifest: ManifestRef<'_>) -> Result<String, E
     let reference = match manifest {
         ManifestRef::Url(url) => url.to_string(),
         ManifestRef::Embedded(bytes) => {
-            format!("data:application/c2pa;base64,{}", base64::encode(bytes))
+            format!("{DATA_URI_PREFIX}{}", codec::encode(bytes))
         }
     };
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };

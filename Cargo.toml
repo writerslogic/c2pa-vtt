@@ -17,6 +17,10 @@ hash = ["dep:sha2"]
 c2pa = ["dep:c2pa", "hash"]
 
 [dependencies]
+# Reuses c2pa-structured-text's manifest-armour primitives (base64, delimiters, exclusion hashing).
+# Git-pinned so CI (which checks out only this repo) resolves it; switch to a version requirement
+# once c2pa-structured-text is published with these `pub` items, before publishing c2pa-vtt.
+c2pa-structured-text = { git = "https://github.com/writerslogic/c2pa-structured-text", rev = "6fd4c142478a08fcecf316bddc3c8565663828f3", default-features = false }
 sha2 = { version = "0.10", optional = true }
 c2pa = { version = "0.89", optional = true, default-features = false, features = [
     "rust_native_crypto",

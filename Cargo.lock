@@ -376,10 +376,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "c2pa-structured-text"
+version = "0.2.0"
+source = "git+https://github.com/writerslogic/c2pa-structured-text?rev=6fd4c142478a08fcecf316bddc3c8565663828f3#6fd4c142478a08fcecf316bddc3c8565663828f3"
+
+[[package]]
 name = "c2pa-vtt"
 version = "0.2.0"
 dependencies = [
  "c2pa",
+ "c2pa-structured-text",
  "sha2 0.10.9",
 ]
 

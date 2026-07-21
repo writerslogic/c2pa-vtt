@@ -11,11 +11,9 @@
 //!
 //! [c2pa-rs]: https://crates.io/crates/c2pa
 
-use crate::base64;
 use crate::error::Error;
 use crate::extract::extract_manifest;
-
-const DATA_URI_PREFIX: &str = "data:application/c2pa;base64,";
+use c2pa_structured_text::{codec, DATA_URI_PREFIX};
 
 /// The origin of a manifest store referenced from a WebVTT file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,8 +34,7 @@ pub fn extract_manifest_source(text: &str) -> Result<ManifestSource, Error> {
     let reference = extract_manifest(text)?.reference;
     match reference.strip_prefix(DATA_URI_PREFIX) {
         Some(b64) => {
-            let bytes =
-                base64::decode(b64).map_err(|e| Error::MalformedReference(e.to_string()))?;
+            let bytes = codec::decode(b64).map_err(|e| Error::MalformedReference(e.to_string()))?;
             Ok(ManifestSource::Embedded(bytes))
         }
         None => Ok(ManifestSource::Url(reference)),

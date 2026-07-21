@@ -1,7 +1,6 @@
 use crate::error::Error;
+use c2pa_structured_text::{find_delimiter, BEGIN, END};
 
-pub(crate) const BEGIN: &str = "-----BEGIN C2PA MANIFEST-----";
-pub(crate) const END: &str = "-----END C2PA MANIFEST-----";
 pub(crate) const SIGNATURE: &str = "WEBVTT";
 pub(crate) const NOTE: &str = "NOTE";
 
@@ -47,11 +46,11 @@ pub fn extract_manifest(text: &str) -> Result<ExtractionResult, Error> {
     let mut found: Option<ExtractionResult> = None;
     let mut search = 0;
 
-    while let Some(rel) = find_sub(&bytes[search..], BEGIN.as_bytes()) {
+    while let Some(rel) = find_delimiter(&bytes[search..], BEGIN) {
         let begin = search + rel;
         let after_begin = begin + BEGIN.len();
 
-        let end = match find_sub(&bytes[after_begin..], END.as_bytes()) {
+        let end = match find_delimiter(&bytes[after_begin..], END) {
             Some(r) => after_begin + r,
             None => return Err(Error::NotFound),
         };
@@ -85,13 +84,6 @@ pub fn extract_manifest(text: &str) -> Result<ExtractionResult, Error> {
     }
 
     found.ok_or(Error::NotFound)
-}
-
-fn find_sub(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return None;
-    }
-    haystack.windows(needle.len()).position(|w| w == needle)
 }
 
 #[cfg(test)]
