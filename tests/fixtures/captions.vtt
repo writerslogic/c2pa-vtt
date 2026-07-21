@@ -1,0 +1,35 @@
+WEBVTT - Sample captions with styling and regions
+
+STYLE
+::cue {
+  background-image: linear-gradient(to bottom, dimgray, lightgray);
+  color: papayawhip;
+}
+::cue(b) {
+  color: peachpuff;
+}
+
+NOTE
+This is an ordinary multi-line author comment.
+It is not a C2PA manifest and must be ignored by extraction.
+
+REGION
+id:speaker
+width:40%
+lines:3
+regionanchor:0%,100%
+viewportanchor:10%,90%
+scroll:up
+
+00:00:00.000 --> 00:00:04.000 region:speaker align:left
+- Hello, world.
+- <b>Welcome</b> to the show.
+
+NOTE A short single-line author comment.
+
+00:00:04.000 --> 00:00:08.000 position:10%,line-left align:left size:35%
+This cue has <i>styled</i> text
+spanning two lines.
+
+00:00:08.000 --> 00:00:12.000
+The final caption.

@@ -1,11 +1,23 @@
 [package]
 name = "c2pa-vtt"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "C2PA manifest embedding for WebVTT subtitle and caption files"
+description = "C2PA manifest embedding and hard binding for WebVTT subtitle and caption files"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/writerslogic/c2pa-vtt"
 keywords = ["c2pa", "provenance", "webvtt", "subtitles", "captions"]
 categories = ["encoding", "parser-implementations"]
 
+[features]
+default = ["hash"]
+# sha2-backed c2pa.hash.data compute/verify. Disable for a zero-dependency
+# embed/extract build.
+hash = ["dep:sha2"]
+# Validation bridge that delegates signature/trust/assertion checks to c2pa-rs.
+c2pa = ["dep:c2pa", "hash"]
+
 [dependencies]
+sha2 = { version = "0.10", optional = true }
+c2pa = { version = "0.89", optional = true, default-features = false, features = [
+    "rust_native_crypto",
+] }
