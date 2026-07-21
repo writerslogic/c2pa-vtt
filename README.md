@@ -1,11 +1,8 @@
 <p align="center">
-  <h1 align="center">c2pa-vtt</h1>
-  <p align="center">C2PA manifest embedding and hard binding for WebVTT subtitle and caption files</p>
-</p>
-
-<p align="center">
   <a href="https://crates.io/crates/c2pa-vtt"><img src="https://img.shields.io/crates/v/c2pa-vtt.svg" alt="crates.io"></a>
   <a href="https://docs.rs/c2pa-vtt"><img src="https://docs.rs/c2pa-vtt/badge.svg" alt="docs.rs"></a>
+  <a href="https://github.com/writerslogic/c2pa-vtt/actions/workflows/ci.yml"><img src="https://github.com/writerslogic/c2pa-vtt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/writerslogic/c2pa-vtt"><img src="https://api.securityscorecards.dev/projects/github.com/writerslogic/c2pa-vtt/badge" alt="OpenSSF Scorecard"></a>
   <a href="#license"><img src="https://img.shields.io/crates/l/c2pa-vtt.svg" alt="License"></a>
 </p>
 
