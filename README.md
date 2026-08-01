@@ -112,12 +112,21 @@ This crate implements the structured text embedding and data hash for WebVTT as 
 
 ## Related Crates
 
+Part of a family of single-purpose crates, one per C2PA embedding method. Each
+is standalone and independently versioned.
+
 | Crate | Description |
 |---|---|
-| [c2pa-structured-text](https://crates.io/crates/c2pa-structured-text) | General structured text embedding (defers WebVTT to this crate) |
+| [c2pa-structured-text](https://crates.io/crates/c2pa-structured-text) | Structured text: ASCII-armoured manifest in a comment or front matter |
+| [c2pa-unstructured-text](https://crates.io/crates/c2pa-unstructured-text) | Unstructured text: invisible Unicode variation-selector run |
+| [c2pa-html](https://crates.io/crates/c2pa-html) | HTML: `script` and `link` elements in the document head |
+| [c2pa-http](https://crates.io/crates/c2pa-http) | HTTP: the `c2pa-manifest` `Link` header, with a Tower middleware |
 | [c2pa-text-binding](https://crates.io/crates/c2pa-text-binding) | Soft binding and content fingerprinting for text assets |
-| [c2pa-warc](https://github.com/writerslogic/c2pa-warc) | WARC web archive embedding |
-| [c2pa-rs](https://crates.io/crates/c2pa) | Official C2PA SDK |
+| [c2pa-zip](https://crates.io/crates/c2pa-zip) | ZIP-based documents: EPUB, DOCX, ODT, OXPS |
+| [c2pa-warc](https://crates.io/crates/c2pa-warc) | WARC web archive embedding (ISO 28500) |
+| [c2pa-fonts](https://crates.io/crates/c2pa-fonts) | OpenType/TrueType (SFNT) font embedding |
+| [c2pa-ml](https://crates.io/crates/c2pa-ml) | ML model containers: GGUF, SafeTensors, ONNX |
+| [c2pa](https://crates.io/crates/c2pa) | Official C2PA SDK |
 
 ## Security
 
