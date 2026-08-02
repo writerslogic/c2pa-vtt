@@ -2,8 +2,11 @@
 name = "c2pa-vtt"
 version = "0.2.0"
 edition = "2021"
+# One MSRV across the crate family; verified with `cargo +1.87 check`.
+rust-version = "1.87"
 description = "C2PA manifest embedding and hard binding for WebVTT subtitle and caption files"
 license = "MIT OR Apache-2.0"
+readme = "README.md"
 repository = "https://github.com/writerslogic/c2pa-vtt"
 keywords = ["c2pa", "provenance", "webvtt", "subtitles", "captions"]
 categories = ["encoding", "parser-implementations"]

@@ -20,6 +20,38 @@ pub enum Error {
     ExclusionOutOfRange,
 }
 
+impl Error {
+    /// The registered C2PA validation status code for this error, or `None`
+    /// when the condition carries no status code.
+    ///
+    /// WebVTT is carried by the structured-text method, for which the
+    /// specification defines no format-specific codes — unlike HTML or
+    /// unstructured text. Only the data-hash condition maps to a code.
+    ///
+    /// Every crate in this family exposes this method, so a dispatcher handling
+    /// several embedding methods can ask the same question of any of them.
+    pub fn code(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::ExclusionOutOfRange => "assertion.dataHash.malformed",
+            Self::NotVtt
+            | Self::NotFound
+            | Self::MultipleManifests
+            | Self::EmptyReference
+            | Self::MalformedReference(_) => return None,
+        })
+    }
+
+    /// Whether this error means the asset carries no provenance at all, as
+    /// opposed to provenance that was found and rejected.
+    ///
+    /// [`Error::MultipleManifests`] counts: the structured-text rules require
+    /// an asset with more than one manifest block to be treated as if no
+    /// manifests were located.
+    pub fn is_no_manifest_located(&self) -> bool {
+        matches!(self, Self::NotFound | Self::MultipleManifests)
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -39,3 +71,55 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn all() -> Vec<Error> {
+        vec![
+            Error::NotVtt,
+            Error::NotFound,
+            Error::MultipleManifests,
+            Error::EmptyReference,
+            Error::MalformedReference("x".into()),
+            Error::ExclusionOutOfRange,
+        ]
+    }
+
+    /// Guards against inventing a code. WebVTT rides the structured-text
+    /// method, which has no format-specific codes.
+    #[test]
+    fn every_code_is_a_registered_identifier() {
+        for e in all() {
+            if let Some(code) = e.code() {
+                assert_eq!(
+                    code, "assertion.dataHash.malformed",
+                    "{e:?} invented a code"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn no_vtt_specific_code_is_emitted() {
+        for e in all() {
+            if let Some(code) = e.code() {
+                assert!(!code.starts_with("manifest."), "{e:?} emits {code}");
+            }
+        }
+    }
+
+    #[test]
+    fn locating_outcomes_carry_no_code() {
+        for e in [Error::NotFound, Error::MultipleManifests] {
+            assert_eq!(e.code(), None, "{e:?} must not report a status code");
+            assert!(
+                e.is_no_manifest_located(),
+                "{e:?} must classify as unsigned"
+            );
+        }
+        // Not a VTT file at all is a different thing from an unsigned one.
+        assert!(!Error::NotVtt.is_no_manifest_located());
+    }
+}
