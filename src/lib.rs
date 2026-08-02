@@ -55,6 +55,12 @@ mod embed;
 mod error;
 mod extract;
 
+#[cfg(all(feature = "python", not(target_arch = "wasm32")))]
+mod python;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+
 pub use binding::{data_hash_exclusion, Exclusion, HashAlg};
 pub use bridge::{extract_manifest_source, ManifestSource};
 pub use embed::{embed_manifest, remove_manifest, ManifestRef};

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "c2pa-vtt"
+description = "C2PA manifest embedding and hard binding for WebVTT subtitle and caption files"
+readme = "README.md"
+license = { text = "MIT OR Apache-2.0" }
+requires-python = ">=3.9"
+keywords = ["c2pa", "provenance", "webvtt", "subtitles", "captions"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Security",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/writerslogic/c2pa-vtt"
+
+[tool.maturin]
+features = ["python"]
+module-name = "c2pa_vtt"
