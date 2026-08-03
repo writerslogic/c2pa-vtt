@@ -16,7 +16,41 @@ pub enum ManifestRef<'a> {
 /// lines as WebVTT requires.
 ///
 /// The file's existing line-terminator convention (LF or CRLF) is preserved.
-/// Fails with [`Error::NotVtt`] if `text` is not a WebVTT file.
+///
+/// # Errors
+///
+/// [`Error::NotVtt`] if `text` does not begin with the `WEBVTT` signature —
+/// including empty input, and content that merely contains the signature
+/// further in. A leading byte-order mark is tolerated, since editors add one.
+///
+/// Input is `&str`, so non-UTF-8 bytes cannot reach this function; the Python
+/// and JavaScript bindings reject them at the boundary.
+///
+/// ```
+/// use c2pa_vtt::{embed_manifest, ManifestRef};
+///
+/// let vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:05.000\nHello\n";
+/// let signed = embed_manifest(vtt, ManifestRef::Url("https://example.com/m.c2pa"))?;
+///
+/// assert!(signed.contains("-----BEGIN C2PA MANIFEST-----"));
+/// assert!(signed.starts_with("WEBVTT"));
+/// // The cue is untouched.
+/// assert!(signed.contains("00:00:00.000 --> 00:00:05.000"));
+/// # Ok::<(), c2pa_vtt::Error>(())
+/// ```
+///
+/// Anything that is not WebVTT is refused rather than silently mangled:
+///
+/// ```
+/// use c2pa_vtt::{embed_manifest, Error, ManifestRef};
+///
+/// let url = "https://example.com/m.c2pa";
+/// assert!(matches!(embed_manifest("", ManifestRef::Url(url)), Err(Error::NotVtt)));
+/// assert!(matches!(
+///     embed_manifest("not a caption file", ManifestRef::Url(url)),
+///     Err(Error::NotVtt)
+/// ));
+/// ```
 pub fn embed_manifest(text: &str, manifest: ManifestRef<'_>) -> Result<String, Error> {
     if !is_webvtt(text) {
         return Err(Error::NotVtt);
@@ -51,13 +85,49 @@ pub fn embed_manifest(text: &str, manifest: ManifestRef<'_>) -> Result<String, E
     Ok(out)
 }
 
-/// Remove the manifest `NOTE` block from a WebVTT file, returning the file with
-/// that block's byte range spliced out.
+/// Remove the C2PA manifest `NOTE` block, restoring the file to its unsigned
+/// form.
+///
+/// # Errors
+///
+/// [`Error::NotVtt`] if `text` is not WebVTT, [`Error::NotFound`] if it carries
+/// no manifest block, and [`Error::MultipleManifests`] if it carries more than
+/// one. Removing nothing is an error rather than a silent no-op, so a caller
+/// cannot mistake "already clean" for "cleaned".
+///
+/// ```
+/// use c2pa_vtt::{embed_manifest, remove_manifest, ManifestRef};
+///
+/// let vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:05.000\nHello\n";
+/// let signed = embed_manifest(vtt, ManifestRef::Url("https://example.com/m.c2pa"))?;
+///
+/// // Removal is the exact inverse of embedding.
+/// assert_eq!(remove_manifest(&signed)?, vtt);
+/// # Ok::<(), c2pa_vtt::Error>(())
+/// ```
 pub fn remove_manifest(text: &str) -> Result<String, Error> {
     let found = extract_manifest(text)?;
-    let mut out = String::with_capacity(text.len() - found.length);
-    out.push_str(&text[..found.offset]);
-    out.push_str(&text[found.offset + found.length..]);
+    let before = &text[..found.offset];
+    let mut after = &text[found.offset + found.length..];
+
+    // `embed_manifest` writes the block *and* a blank line separating it from
+    // the body, but the extraction range covers only the block line — that
+    // range is the hard-binding exclusion and must stay exactly the line.
+    // Removing the line alone would orphan the separator, so `remove(embed(x))`
+    // would gain a blank line instead of returning `x`. Consume it only when
+    // the text before the block already ends with a terminator, which is
+    // precisely when the leftover would double up.
+    if before.ends_with('\n') {
+        if let Some(rest) = after.strip_prefix("\r\n") {
+            after = rest;
+        } else if let Some(rest) = after.strip_prefix('\n') {
+            after = rest;
+        }
+    }
+
+    let mut out = String::with_capacity(before.len() + after.len());
+    out.push_str(before);
+    out.push_str(after);
     Ok(out)
 }
 
@@ -131,5 +201,48 @@ mod tests {
             embed_manifest("hello", ManifestRef::Url("urn:x")),
             Err(Error::NotVtt)
         ));
+    }
+}
+
+#[cfg(test)]
+mod round_trip {
+    use super::*;
+
+    /// Removing a manifest must restore the file byte for byte. The extraction
+    /// range covers only the block line (it is the hard-binding exclusion), but
+    /// embedding also writes the blank line separating the block from the body,
+    /// so removal has to take that back or signing becomes lossy.
+    #[test]
+    fn remove_is_the_exact_inverse_of_embed() {
+        for original in [
+            "WEBVTT\n\n00:00:00.000 --> 00:00:05.000\nHello\n",
+            "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:05.000\r\nHello\r\n",
+            "WEBVTT - With A Title\n\n00:00:00.000 --> 00:00:01.000\nHi\n",
+            "\u{feff}WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHi\n",
+        ] {
+            for manifest in [
+                ManifestRef::Url("https://example.com/m.c2pa"),
+                ManifestRef::Embedded(b"manifest-store-bytes"),
+            ] {
+                let signed = embed_manifest(original, manifest).unwrap();
+                assert_ne!(signed, original, "embedding changed nothing");
+                assert_eq!(
+                    remove_manifest(&signed).unwrap(),
+                    original,
+                    "round trip lost or gained bytes for {original:?}"
+                );
+            }
+        }
+    }
+
+    /// A hand-written file with no blank line after the block must not lose the
+    /// first line of the body.
+    #[test]
+    fn removal_does_not_eat_the_body_when_there_is_no_separator() {
+        let vtt = "WEBVTT\n\nNOTE -----BEGIN C2PA MANIFEST----- urn:x -----END C2PA MANIFEST-----\n00:00:00.000 --> 00:00:01.000\nHi\n";
+        assert_eq!(
+            remove_manifest(vtt).unwrap(),
+            "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHi\n"
+        );
     }
 }

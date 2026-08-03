@@ -35,8 +35,38 @@ pub(crate) fn is_webvtt(text: &str) -> bool {
 ///
 /// Only a single-line `NOTE` comment carrying both delimiters is recognised;
 /// occurrences of the delimiters on non-`NOTE` lines (e.g. inside cue text) are
-/// ignored. Returns [`Error::MultipleManifests`] if more than one qualifying
-/// block is present.
+/// ignored.
+///
+/// # Errors
+///
+/// [`Error::NotVtt`] if `text` is not WebVTT (including empty input),
+/// [`Error::NotFound`] if it carries no manifest block, and
+/// [`Error::MultipleManifests`] if more than one qualifying block is present —
+/// the structured-text rules allow at most one.
+///
+/// ```
+/// use c2pa_vtt::{embed_manifest, extract_manifest, ManifestRef};
+///
+/// let vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:05.000\nHello\n";
+/// let url = "https://example.com/m.c2pa";
+/// let signed = embed_manifest(vtt, ManifestRef::Url(url))?;
+///
+/// let found = extract_manifest(&signed)?;
+/// assert_eq!(found.reference, url);
+/// // The block's byte range is what the hard binding excludes.
+/// assert!(signed[found.offset..found.offset + found.length].contains("NOTE"));
+/// # Ok::<(), c2pa_vtt::Error>(())
+/// ```
+///
+/// A delimiter inside cue text is not a manifest, and empty input is not WebVTT:
+///
+/// ```
+/// use c2pa_vtt::{extract_manifest, Error};
+///
+/// let vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n-----BEGIN C2PA MANIFEST-----\n";
+/// assert!(matches!(extract_manifest(vtt), Err(Error::NotFound)));
+/// assert!(matches!(extract_manifest(""), Err(Error::NotVtt)));
+/// ```
 pub fn extract_manifest(text: &str) -> Result<ExtractionResult, Error> {
     if !is_webvtt(text) {
         return Err(Error::NotVtt);
@@ -150,5 +180,70 @@ mod tests {
         let vtt = "WEBVTT\r\n\r\nNOTE -----BEGIN C2PA MANIFEST----- urn:x -----END C2PA MANIFEST-----\r\n\r\n";
         let r = extract_manifest(vtt).unwrap();
         assert!(vtt[r.offset..r.offset + r.length].ends_with("\r\n"));
+    }
+}
+
+#[cfg(test)]
+mod malformed_input {
+    use super::*;
+
+    const URL: &str = "https://example.com/m.c2pa";
+
+    /// Every public entry point must refuse non-WebVTT input with a descriptive
+    /// error rather than panicking or silently producing nonsense.
+    #[test]
+    fn malformed_input_is_refused_by_every_entry_point() {
+        for bad in [
+            "",                      // empty
+            "   ",                   // whitespace only
+            "not a caption file",    // no signature
+            "\u{0}\u{1}\u{2}binary", // control bytes
+            "webvtt",                // wrong case: the signature is case-sensitive
+            "XWEBVTT",               // signature not at the start
+            "WEBVTTX",               // signature not followed by whitespace or EOF
+        ] {
+            assert!(
+                matches!(extract_manifest(bad), Err(Error::NotVtt)),
+                "extract accepted {bad:?}"
+            );
+            assert!(
+                matches!(
+                    crate::embed_manifest(bad, crate::ManifestRef::Url(URL)),
+                    Err(Error::NotVtt)
+                ),
+                "embed accepted {bad:?}"
+            );
+            assert!(
+                matches!(crate::remove_manifest(bad), Err(Error::NotVtt)),
+                "remove accepted {bad:?}"
+            );
+        }
+    }
+
+    /// A byte-order mark is tolerated: editors add one and the file is still
+    /// WebVTT.
+    #[test]
+    fn a_leading_byte_order_mark_is_accepted() {
+        let vtt = "\u{feff}WEBVTT\n\n00:00:00.000 --> 00:00:05.000\nHi\n";
+        let signed = crate::embed_manifest(vtt, crate::ManifestRef::Url(URL)).unwrap();
+        assert_eq!(extract_manifest(&signed).unwrap().reference, URL);
+    }
+
+    /// The signature alone, with no cues, is still a valid WebVTT file.
+    #[test]
+    fn a_signature_only_file_is_valid() {
+        for vtt in ["WEBVTT", "WEBVTT\n", "WEBVTT - with a title\n"] {
+            assert!(
+                crate::embed_manifest(vtt, crate::ManifestRef::Url(URL)).is_ok(),
+                "rejected {vtt:?}"
+            );
+        }
+    }
+
+    /// The error message names the problem, so a caller can surface it.
+    #[test]
+    fn the_error_message_is_descriptive() {
+        let msg = Error::NotVtt.to_string();
+        assert!(msg.contains("WEBVTT"), "unhelpful message: {msg}");
     }
 }
