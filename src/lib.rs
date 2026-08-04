@@ -49,6 +49,8 @@
 //!   a zero-dependency embed/extract build.
 //! - `c2pa` (off by default): the [`bridge::validate`] delegation to c2pa-rs.
 
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
 pub mod binding;
 pub mod bridge;
 mod embed;

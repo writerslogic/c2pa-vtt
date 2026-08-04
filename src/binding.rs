@@ -33,8 +33,11 @@ pub struct Exclusion {
 /// A C2PA cryptographic hash algorithm usable for the data hash.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HashAlg {
+    /// SHA-256, the C2PA `sha256` identifier.
     Sha256,
+    /// SHA-384, the C2PA `sha384` identifier.
     Sha384,
+    /// SHA-512, the C2PA `sha512` identifier.
     Sha512,
 }
 
