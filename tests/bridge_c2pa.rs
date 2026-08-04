@@ -31,6 +31,10 @@ fn sign_store_for(signed_vtt: &str) -> Vec<u8> {
     let hash = compute_data_hash(signed_vtt, HashAlg::Sha256).unwrap();
 
     let signer = create_signer::from_keys(CERT, KEY, SigningAlg::Es256, None).unwrap();
+    // `from_json` is deprecated in favour of `from_context(..).with_definition(..)`,
+    // which needs a `Context` this test has no use for. Matches how c2pa-fonts
+    // drives the same builder; migrate both together when the old API goes.
+    #[allow(deprecated)]
     let mut builder = Builder::from_json(MANIFEST_JSON).unwrap();
     builder
         .data_hashed_placeholder(signer.reserve_size(), "application/c2pa")
@@ -54,15 +58,20 @@ fn bridge_validates_real_signed_hard_binding() {
     // Delegation runs: text/vtt is accepted, signature + hard binding validate.
     let reader = bridge::validate(&signed_vtt, &store).expect("c2pa reader");
     let results = reader.validation_results().expect("validation results");
+    // c2pa-rs 0.89.3 moved the status lists off `ValidationResults` onto the
+    // per-manifest `StatusCodes`, reached through `active_manifest()`.
+    let statuses = results
+        .active_manifest()
+        .expect("active manifest status codes");
 
-    let failures: Vec<&str> = results.failure().iter().map(|s| s.code()).collect();
+    let failures: Vec<&str> = statuses.failure().iter().map(|s| s.code()).collect();
     // No hard-binding failure: our exclusion + hash matched c2pa-rs's own check.
     assert!(
         !failures.iter().any(|c| c.contains("dataHash")),
         "unexpected data-hash failure: {failures:?}"
     );
     // Positively: c2pa-rs reports the data hash matched, and the signature is valid.
-    let successes: Vec<&str> = results.success().iter().map(|s| s.code()).collect();
+    let successes: Vec<&str> = statuses.success().iter().map(|s| s.code()).collect();
     assert!(
         successes.contains(&"assertion.dataHash.match"),
         "expected assertion.dataHash.match; successes={successes:?}"
@@ -85,6 +94,8 @@ fn bridge_detects_tampered_cue() {
     let failures: Vec<&str> = reader
         .validation_results()
         .expect("validation results")
+        .active_manifest()
+        .expect("active manifest status codes")
         .failure()
         .iter()
         .map(|s| s.code())
