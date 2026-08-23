@@ -1,3 +1,7 @@
+# c2pa-vtt
+
+_C2PA manifest embedding and hard binding for WebVTT subtitle and caption files._
+
 <p align="center">
   <a href="https://crates.io/crates/c2pa-vtt"><img src="https://img.shields.io/crates/v/c2pa-vtt.svg" alt="crates.io"></a>
   <a href="https://docs.rs/c2pa-vtt"><img src="https://docs.rs/c2pa-vtt/badge.svg" alt="docs.rs"></a>
@@ -10,6 +14,7 @@
 
 Embeds, extracts, and hard-binds a C2PA Manifest Store reference in [WebVTT](https://www.w3.org/TR/webvtt1/) files. The manifest is carried in a single-line `NOTE` comment using the fixed ASCII armour delimiters, placed immediately after the `WEBVTT` signature (where it survives HLS/DASH segmentation), per the C2PA [structured text embedding](https://spec.c2pa.org/specifications/specifications/2.4/specs/C2PA_Specification.html) rules.
 
+> [!NOTE]
 > **Canonical owner of WebVTT.** WebVTT is structured text per the specification, so the general [c2pa-structured-text](https://github.com/writerslogic/c2pa-structured-text) crate could embed into it via the `NOTE` comment style — but this crate owns `.vtt`. It targets the streaming-safe placement after the `WEBVTT` signature and validates the header. Use this crate for WebVTT; use `c2pa-structured-text` for other structured text.
 
 ```
@@ -45,6 +50,13 @@ A byte-exact hard binding is therefore feasible and implemented here. It is frag
 ```toml
 [dependencies]
 c2pa-vtt = "0.2"
+```
+
+The same crate is published for JavaScript/WebAssembly and Python, built from this source:
+
+```bash
+npm install c2pa-vtt   # wasm-bindgen build
+pip install c2pa-vtt   # PyO3 abi3 wheel, CPython 3.9+
 ```
 
 ### Generate: embed a reference and compute the hard binding
