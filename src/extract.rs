@@ -31,6 +31,22 @@ pub(crate) fn is_webvtt(text: &str) -> bool {
     }
 }
 
+pub(crate) fn reject_bare_cr(text: &str) -> Result<(), Error> {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\r' {
+            if bytes.get(i + 1) != Some(&b'\n') {
+                return Err(Error::BareCarriageReturn);
+            }
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    Ok(())
+}
+
 /// Locate the C2PA manifest `NOTE` block in a WebVTT file.
 ///
 /// Only a single-line `NOTE` comment carrying both delimiters is recognised;
@@ -68,6 +84,7 @@ pub(crate) fn is_webvtt(text: &str) -> bool {
 /// assert!(matches!(extract_manifest(""), Err(Error::NotVtt)));
 /// ```
 pub fn extract_manifest(text: &str) -> Result<ExtractionResult, Error> {
+    reject_bare_cr(text)?;
     if !is_webvtt(text) {
         return Err(Error::NotVtt);
     }
@@ -180,6 +197,15 @@ mod tests {
         let vtt = "WEBVTT\r\n\r\nNOTE -----BEGIN C2PA MANIFEST----- urn:x -----END C2PA MANIFEST-----\r\n\r\n";
         let r = extract_manifest(vtt).unwrap();
         assert!(vtt[r.offset..r.offset + r.length].ends_with("\r\n"));
+    }
+
+    #[test]
+    fn bare_cr_is_rejected() {
+        let vtt = "WEBVTT\rNOTE -----BEGIN C2PA MANIFEST----- urn:x -----END C2PA MANIFEST-----";
+        assert!(matches!(
+            extract_manifest(vtt),
+            Err(Error::BareCarriageReturn)
+        ));
     }
 }
 
