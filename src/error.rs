@@ -10,6 +10,12 @@ pub enum Error {
     /// More than one manifest `NOTE` block was found. Per the C2PA structured
     /// text embedding rules there shall be at most one; the file is rejected.
     MultipleManifests,
+    /// Embedding was requested for a file that already carries a manifest
+    /// NOTE block.
+    AlreadyEmbedded,
+    /// The file contains a bare CR line ending; C2PA structured text accepts
+    /// LF and CRLF only.
+    BareCarriageReturn,
     /// A manifest `NOTE` block was found but the reference between the
     /// delimiters is empty.
     EmptyReference,
@@ -36,6 +42,8 @@ impl Error {
             Self::NotVtt
             | Self::NotFound
             | Self::MultipleManifests
+            | Self::AlreadyEmbedded
+            | Self::BareCarriageReturn
             | Self::EmptyReference
             | Self::MalformedReference(_) => return None,
         })
@@ -58,6 +66,10 @@ impl fmt::Display for Error {
             Self::NotVtt => write!(f, "file does not start with WEBVTT header"),
             Self::NotFound => write!(f, "no manifest NOTE block found"),
             Self::MultipleManifests => write!(f, "multiple manifest NOTE blocks found"),
+            Self::AlreadyEmbedded => write!(f, "a manifest NOTE block is already present"),
+            Self::BareCarriageReturn => {
+                write!(f, "bare CR line endings are not supported; use LF or CRLF")
+            }
             Self::EmptyReference => write!(f, "empty manifest reference"),
             Self::MalformedReference(s) => write!(f, "malformed manifest reference: {s}"),
             Self::ExclusionOutOfRange => {
@@ -81,6 +93,8 @@ mod tests {
             Error::NotVtt,
             Error::NotFound,
             Error::MultipleManifests,
+            Error::AlreadyEmbedded,
+            Error::BareCarriageReturn,
             Error::EmptyReference,
             Error::MalformedReference("x".into()),
             Error::ExclusionOutOfRange,

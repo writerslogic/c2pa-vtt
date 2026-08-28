@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::extract::{extract_manifest, is_webvtt};
+use crate::extract::{extract_manifest, is_webvtt, reject_bare_cr};
 use c2pa_structured_text::{codec, BEGIN, DATA_URI_PREFIX, END};
 
 /// A manifest to associate with a WebVTT file.
@@ -52,8 +52,14 @@ pub enum ManifestRef<'a> {
 /// ));
 /// ```
 pub fn embed_manifest(text: &str, manifest: ManifestRef<'_>) -> Result<String, Error> {
+    reject_bare_cr(text)?;
     if !is_webvtt(text) {
         return Err(Error::NotVtt);
+    }
+    match extract_manifest(text) {
+        Ok(_) | Err(Error::MultipleManifests) => return Err(Error::AlreadyEmbedded),
+        Err(Error::NotFound) => {}
+        Err(error) => return Err(error),
     }
 
     let reference = match manifest {
@@ -188,10 +194,17 @@ mod tests {
     fn embed_twice_is_rejected() {
         let plain = "WEBVTT\n\n00:00:00.000 --> 00:00:05.000\nHello\n";
         let once = embed_manifest(plain, ManifestRef::Url("urn:a")).unwrap();
-        let twice = embed_manifest(&once, ManifestRef::Url("urn:b")).unwrap();
         assert!(matches!(
-            extract_manifest(&twice),
-            Err(Error::MultipleManifests)
+            embed_manifest(&once, ManifestRef::Url("urn:b")),
+            Err(Error::AlreadyEmbedded)
+        ));
+    }
+
+    #[test]
+    fn embed_rejects_bare_cr() {
+        assert!(matches!(
+            embed_manifest("WEBVTT\rbody", ManifestRef::Url("urn:x")),
+            Err(Error::BareCarriageReturn)
         ));
     }
 
