@@ -63,7 +63,22 @@ pub fn embed_manifest(text: &str, manifest: ManifestRef<'_>) -> Result<String, E
     }
 
     let reference = match manifest {
-        ManifestRef::Url(url) => url.to_string(),
+        ManifestRef::Url(url) => {
+            // Unlike the Embedded form (base64 has no `-->`, no line breaks),
+            // a URL is interpolated into the NOTE block verbatim. The W3C
+            // WebVTT comment-block grammar ends the comment at the first
+            // blank line and treats `-->` as starting a new cue, so a
+            // hostile URL containing either could inject a visible, unsigned
+            // cue that this block's hard-binding exclusion range never
+            // covers -- the exclusion is computed from this crate's own
+            // output, not from what a real player would parse.
+            if url.contains("-->") || url.contains('\r') || url.contains('\n') {
+                return Err(Error::MalformedReference(
+                    "URL contains a WebVTT cue-timing marker or a line break".into(),
+                ));
+            }
+            url.to_string()
+        }
         ManifestRef::Embedded(bytes) => {
             format!("{DATA_URI_PREFIX}{}", codec::encode(bytes))
         }
@@ -76,7 +91,13 @@ pub fn embed_manifest(text: &str, manifest: ManifestRef<'_>) -> Result<String, E
         None => (text, ""),
     };
     let header = header.strip_suffix('\r').unwrap_or(header);
-    let body = rest.trim_start_matches(['\r', '\n']);
+    // Strip exactly the one blank-line separator this function will itself
+    // reinsert before `body`, not every leading blank line: trim_start_matches
+    // with a char set would collapse two or more original blank lines after
+    // the header down to the single pair embed_manifest reinserts, losing
+    // bytes outside the hard-binding exclusion range on a remove-manifest
+    // round trip.
+    let body = rest.strip_prefix(newline).unwrap_or(rest);
 
     let mut out = String::with_capacity(text.len() + note.len() + 4 * newline.len());
     out.push_str(header);
@@ -151,6 +172,35 @@ mod tests {
         let sig = signed.find("WEBVTT").unwrap();
         let note = signed.find("NOTE").unwrap();
         assert!(sig < note);
+    }
+
+    /// A hostile URL carrying a cue-timing marker or a line break must be
+    /// rejected, not interpolated verbatim into the NOTE block where it could
+    /// inject a visible, unsigned cue a real player would render but the hard
+    /// binding never covers.
+    #[test]
+    fn a_url_with_a_cue_marker_or_line_break_is_rejected() {
+        let plain = "WEBVTT\n\n00:00:00.000 --> 00:00:05.000\nHello\n";
+        for hostile in [
+            "https://a.example/m.c2pa\n\n00:00:01.000 --> 00:00:02.000\nInjected",
+            "https://a.example/-->m.c2pa",
+            "https://a.example/\rm.c2pa",
+        ] {
+            assert!(matches!(
+                embed_manifest(plain, ManifestRef::Url(hostile)),
+                Err(Error::MalformedReference(_))
+            ));
+        }
+    }
+
+    /// Two or more blank lines after the header must survive a
+    /// remove(embed(x)) round trip, not collapse to the one separator pair
+    /// embed_manifest itself reinserts.
+    #[test]
+    fn embed_then_remove_preserves_extra_blank_lines_after_header() {
+        let plain = "WEBVTT\n\n\n00:00:00.000 --> 00:00:05.000\nHello\n";
+        let signed = embed_manifest(plain, ManifestRef::Url("https://example.com/m.c2pa")).unwrap();
+        assert_eq!(remove_manifest(&signed).unwrap(), plain);
     }
 
     #[test]

@@ -106,8 +106,18 @@ pub fn extract_manifest(text: &str) -> Result<ExtractionResult, Error> {
         let line_start = text[..begin].rfind('\n').map_or(0, |p| p + 1);
 
         // The block is only recognised when the delimiters sit on a WebVTT
-        // comment line, i.e. the text before BEGIN on this line is `NOTE`.
-        if text[line_start..begin].trim() == NOTE {
+        // comment line, i.e. the text before BEGIN on this line is `NOTE`,
+        // AND the two delimiters are on that same line -- only the
+        // single-line form is legal here (this crate's own doc comment
+        // says so). find_delimiter itself has no line-boundary awareness,
+        // so without this check END could be reached from anywhere later in
+        // the file, including past a blank line and a live cue: a real
+        // WebVTT player ends the comment at the first blank line, so that
+        // cue would render as visible, unsigned content that this block's
+        // hard-binding exclusion range (computed from begin to end) would
+        // wrongly cover, letting it be tampered with undetected.
+        let on_one_line = !text[after_begin..end].contains('\n');
+        if on_one_line && text[line_start..begin].trim() == NOTE {
             let reference = text[after_begin..end].trim().to_string();
             if reference.is_empty() {
                 return Err(Error::EmptyReference);
@@ -189,6 +199,16 @@ mod tests {
     #[test]
     fn ignores_delimiter_in_cue_text() {
         let vtt = "WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n-----BEGIN C2PA MANIFEST----- nope -----END C2PA MANIFEST-----\n";
+        assert!(matches!(extract_manifest(vtt), Err(Error::NotFound)));
+    }
+
+    /// A legitimate NOTE BEGIN whose END is reached only after crossing a
+    /// blank line and a live cue must not be recognised as a manifest block
+    /// -- a real player renders that cue as visible, unsigned content the
+    /// hard binding must not silently cover.
+    #[test]
+    fn begin_and_end_must_be_on_the_same_note_line() {
+        let vtt = "WEBVTT\n\nNOTE -----BEGIN C2PA MANIFEST----- urn:x\n\n00:00:01.000 --> 00:00:02.000\nInjected\n\nNOTE -----END C2PA MANIFEST-----\n";
         assert!(matches!(extract_manifest(vtt), Err(Error::NotFound)));
     }
 
