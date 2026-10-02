@@ -86,18 +86,22 @@ pub fn embed_manifest(text: &str, manifest: ManifestRef<'_>) -> Result<String, E
     let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let note = format!("NOTE {BEGIN} {reference} {END}");
 
-    let (header, rest) = match text.find('\n') {
-        Some(nl) => (&text[..nl], &text[nl + 1..]),
-        None => (text, ""),
+    // The header region is the `WEBVTT` signature line plus any immediately
+    // following header lines, up to the first blank-line separator -- not
+    // just the signature's own line. An HLS WebVTT segment (RFC 8216 section
+    // 3.5) carries an `X-TIMESTAMP-MAP` metadata line "added to" the WebVTT
+    // header, i.e. in the same header block as the signature, with no blank
+    // line between them. WebVTT's own grammar treats everything before the
+    // first blank line as one contiguous header: splitting after only the
+    // signature line and inserting the manifest block there would place a
+    // blank line between WEBVTT and X-TIMESTAMP-MAP, moving the latter out
+    // of the header and silently breaking the local-to-global timestamp
+    // mapping HLS players rely on.
+    let blank_sep = format!("{newline}{newline}");
+    let (header, body) = match text.find(&blank_sep) {
+        Some(idx) => (&text[..idx], &text[idx + blank_sep.len()..]),
+        None => (text.trim_end_matches(newline), ""),
     };
-    let header = header.strip_suffix('\r').unwrap_or(header);
-    // Strip exactly the one blank-line separator this function will itself
-    // reinsert before `body`, not every leading blank line: trim_start_matches
-    // with a char set would collapse two or more original blank lines after
-    // the header down to the single pair embed_manifest reinserts, losing
-    // bytes outside the hard-binding exclusion range on a remove-manifest
-    // round trip.
-    let body = rest.strip_prefix(newline).unwrap_or(rest);
 
     let mut out = String::with_capacity(text.len() + note.len() + 4 * newline.len());
     out.push_str(header);
@@ -172,6 +176,25 @@ mod tests {
         let sig = signed.find("WEBVTT").unwrap();
         let note = signed.find("NOTE").unwrap();
         assert!(sig < note);
+    }
+
+    /// An HLS WebVTT segment's `X-TIMESTAMP-MAP` line (RFC 8216 section 3.5)
+    /// is part of the WebVTT header block, with no blank line separating it
+    /// from the `WEBVTT` signature. Embedding a manifest must place the NOTE
+    /// block after that whole header, not between the signature and
+    /// X-TIMESTAMP-MAP -- doing the latter would move the mapping out of the
+    /// header and break playback-timestamp synchronization.
+    #[test]
+    fn embed_preserves_an_hls_timestamp_map_header() {
+        let plain =
+            "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n00:00:00.000 --> 00:00:05.000\nHello\n";
+        let signed = embed_manifest(plain, ManifestRef::Url("https://example.com/m.c2pa")).unwrap();
+        // The signature and the timestamp map stay adjacent, with no blank
+        // line between them.
+        assert!(signed.starts_with(
+            "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\nNOTE -----BEGIN"
+        ));
+        assert_eq!(remove_manifest(&signed).unwrap(), plain);
     }
 
     /// A hostile URL carrying a cue-timing marker or a line break must be
@@ -282,6 +305,7 @@ mod round_trip {
             "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:05.000\r\nHello\r\n",
             "WEBVTT - With A Title\n\n00:00:00.000 --> 00:00:01.000\nHi\n",
             "\u{feff}WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHi\n",
+            "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n00:00:00.000 --> 00:00:05.000\nHello\n",
         ] {
             for manifest in [
                 ManifestRef::Url("https://example.com/m.c2pa"),
